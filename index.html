@@ -60,10 +60,70 @@ function shuffle(rand, array) {
   return array;
 }
 
+function capitalize(str) {
+  return str[0].toUpperCase() + str.substr(1)
+}
+
+function capitalizePiece(piece) {
+  // \p{Word} matches any word in Unicode, \w does not, apparently
+  // https://stackoverflow.com/questions/3576232/how-to-match-unicode-words-with-ruby-1-9#3576559
+  let bits
+
+  // Match contractions like d'Silva
+  if (bits = /^([a-z]['’])(\w+)/.exec(piece))
+    return `${bits[1]}${capitalize(bits[2])}`
+  // Match okina and similar leading punctuation characters that will match \p{Word}
+  else if (bits = /^([ʻ])(\w+)/.exec(piece))
+    return `${bits[1]}${capitalize(bits[2])}`
+  else if (bits = /(.*?)(\w+)(.*)/.exec(piece))
+    return `${bits[1]}${capitalize(bits[2])}${bits[3]}`
+  else
+    return piece
+
+}
+
+function capitalizeName(comname) {
+  const uncapitalized = [
+    "à",
+    "a",
+    "and",
+    "con",
+    "da",
+    "dal",
+    "de",
+    "dei",
+    "del",
+    "des",
+    "di",
+    "du",
+    "e",
+    "in",
+    "la",
+    "o",
+    "on",
+    "of",
+    "the"
+  ]
+  const comname_pieces = comname.split( /\s+/ )
+  return comname_pieces.map((piece, i) => {
+    if (i > 0 && uncapitalized.includes( piece.toLowerCase() ))
+      return piece.toLowerCase()
+    else if (i === comname_pieces.length - 1)
+      return piece.split("-").map((s) =>
+        uncapitalized.includes(s.toLowerCase())
+          ? s.toLowerCase()
+          : capitalizePiece(s)
+      ).join( "-" )
+    else
+      return capitalizePiece(piece)
+  }).join(" ")
+}
+
+
 function Square({taxon}) {
   return h('a', {class: 'square', href: 'https://inaturalist.org/taxa/' + taxon.id}, [
     h('img', {src: taxon.default_photo.square_url, width: 150, height: 150}),
-    h('label', null, taxon.preferred_common_name ?? taxon.name)
+    h('label', null, taxon.preferred_common_name ? capitalizeName(taxon.preferred_common_name): taxon.name)
   ])
 }
 
