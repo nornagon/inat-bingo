@@ -1,0 +1,74 @@
+<!doctype html>
+<body>
+<style>
+.card > .row {
+  display: flex;
+}
+.card > .row > a {
+  display: flex;
+  position: relative;
+  text-decoration: none;
+}
+.card .label {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  background: rgba(0, 0, 0, 50%);
+  color: white;
+  font-family: sans-serif;
+  font-size: 14px;
+}
+</style>
+<script>
+  function mkRandom(seed) {
+    return () => {
+      return ((seed = seed * 16807 % 2147483647) - 1) / 2147483646
+    }
+  }
+  const date = new Date
+  const rand = mkRandom(('' + date.getUTCFullYear() + date.getUTCMonth())|0)
+  function shuffle(array) {
+    let currentIndex = array.length,  randomIndex;
+
+    // While there remain elements to shuffle...
+    while (currentIndex != 0) {
+
+      // Pick a remaining element...
+      randomIndex = Math.floor(rand() * currentIndex);
+      currentIndex--;
+
+      // And swap it with the current element.
+      [array[currentIndex], array[randomIndex]] = [
+        array[randomIndex], array[currentIndex]];
+    }
+
+    return array;
+  }
+  fetch('https://api.inaturalist.org/v1/observations/species_counts?verifiable=true&spam=false&place_id=854&locale=en-US&preferred_place_id=1').then(r => r.json()).then(species => {
+    const squares = shuffle(species.results).slice(0, 25)
+    const card = document.createElement('div')
+    card.className = 'card'
+    for (let y = 0; y < 5; y++) {
+      const row = document.createElement('div')
+      row.className = 'row'
+      for (let x = 0; x < 5; x++) {
+        const square = squares[y*5+x]
+        const a = document.createElement('a')
+        a.href = 'https://inaturalist.org/taxa/' + square.taxon.id
+        const img = new Image
+        img.src = square.taxon.default_photo.square_url
+        img.width = 150
+        img.height = 150 // TODO
+        img.setAttribute('title', square.taxon.preferred_common_name)
+        a.appendChild(img)
+        const label = document.createElement('div')
+        label.textContent = square.taxon.english_common_name
+        label.className = 'label'
+        a.appendChild(label)
+        row.appendChild(a)
+      }
+      card.appendChild(row)
+    }
+    document.body.appendChild(card)
+  })
+</script>
