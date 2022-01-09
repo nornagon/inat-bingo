@@ -1,15 +1,18 @@
 <!doctype html>
-<body>
 <style>
-.card > .row {
-  display: flex;
-}
-.card > .row > a {
-  display: flex;
-  position: relative;
+.square {
+  display: block;
   text-decoration: none;
+  position: relative;
 }
-.card .label {
+.square > img {
+  display: block;
+}
+.card {
+  display: grid;
+  grid-template-columns: repeat(5, min-content);
+}
+.square label {
   position: absolute;
   bottom: 0;
   width: 100%;
@@ -18,57 +21,118 @@
   font-family: sans-serif;
   font-size: 14px;
 }
+web-complete .suggestions {
+  position: absolute;
+  z-index: 1;
+}
+web-complete .suggestion {
+  display: block;
+}
+web-complete .active {
+  background: blue;
+}
 </style>
-<script>
-  function mkRandom(seed) {
+<script type="module" src="https://unpkg.com/web-complete"></script>
+<script type="module">
+import { h, render } from 'https://unpkg.com/preact@latest?module';
+import { useState, useEffect } from 'https://unpkg.com/preact@latest/hooks/dist/hooks.module.js?module';
+
+function mkRandom(seed) {
+  return () => {
+    return ((seed = seed * 16807 % 2147483647) - 1) / 2147483646
+  }
+}
+function shuffle(rand, array) {
+  let currentIndex = array.length,  randomIndex;
+
+  // While there remain elements to shuffle...
+  while (currentIndex != 0) {
+
+    // Pick a remaining element...
+    randomIndex = Math.floor(rand() * currentIndex);
+    currentIndex--;
+
+    // And swap it with the current element.
+    [array[currentIndex], array[randomIndex]] = [
+      array[randomIndex], array[currentIndex]];
+  }
+
+  return array;
+}
+
+function Square({taxon}) {
+  return h('a', {class: 'square', href: 'https://inaturalist.org/taxa/' + taxon.id}, [
+    h('img', {src: taxon.default_photo.square_url, width: 150, height: 150}),
+    h('label', null, taxon.preferred_common_name ?? taxon.name)
+  ])
+}
+
+const initialLocation = (location.hash.substr(1)|0) || 854
+
+function App() {
+  const [date] = useState(new Date)
+  const [species, setSpecies] = useState(null)
+  const [placeId, setPlaceId] = useState(initialLocation)
+
+  useEffect(() => {
+    location.hash = placeId
+  }, [placeId])
+
+  useEffect(() => {
+    function hashchange() {
+      setPlaceId((location.hash.substr(1)|0) || 854)
+    }
+    window.addEventListener('hashchange', hashchange)
     return () => {
-      return ((seed = seed * 16807 % 2147483647) - 1) / 2147483646
+      window.removeEventListener('hashchange', hashchange)
     }
-  }
-  const date = new Date
-  const rand = mkRandom(('' + date.getUTCFullYear() + date.getUTCMonth())|0)
-  function shuffle(array) {
-    let currentIndex = array.length,  randomIndex;
-
-    // While there remain elements to shuffle...
-    while (currentIndex != 0) {
-
-      // Pick a remaining element...
-      randomIndex = Math.floor(rand() * currentIndex);
-      currentIndex--;
-
-      // And swap it with the current element.
-      [array[currentIndex], array[randomIndex]] = [
-        array[randomIndex], array[currentIndex]];
-    }
-
-    return array;
-  }
-  fetch('https://api.inaturalist.org/v1/observations/species_counts?verifiable=true&spam=false&place_id=854&locale=en-US&preferred_place_id=1').then(r => r.json()).then(species => {
-    const squares = shuffle(species.results).slice(0, 25)
-    const card = document.createElement('div')
-    card.className = 'card'
-    for (let y = 0; y < 5; y++) {
-      const row = document.createElement('div')
-      row.className = 'row'
-      for (let x = 0; x < 5; x++) {
-        const square = squares[y*5+x]
-        const a = document.createElement('a')
-        a.href = 'https://inaturalist.org/taxa/' + square.taxon.id
-        const img = new Image
-        img.src = square.taxon.default_photo.square_url
-        img.width = 150
-        img.height = 150 // TODO
-        img.setAttribute('title', square.taxon.preferred_common_name)
-        a.appendChild(img)
-        const label = document.createElement('div')
-        label.textContent = square.taxon.english_common_name
-        label.className = 'label'
-        a.appendChild(label)
-        row.appendChild(a)
-      }
-      card.appendChild(row)
-    }
-    document.body.appendChild(card)
   })
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
+    setSpecies(null)
+    fetch(
+      `https://api.inaturalist.org/v1/observations/species_counts?verifiable=true&spam=false&place_id=${encodeURIComponent(placeId)}&locale=en-US&preferred_place_id=1&hrank=species`,
+      { signal }
+    ).then(r => r.json()).then(species => {
+      const rand = mkRandom(('' + date.getUTCFullYear() + date.getUTCMonth())|0)
+      const squares = shuffle(rand, species.results).slice(0, 25)
+      setSpecies(squares)
+    })
+    return () => {
+      controller.abort()
+    }
+  }, [date, placeId])
+  return [
+    h('web-complete', {
+      suggestionGenerator: async (text) => {
+        const suggestions = await fetch(
+          'https://api.inaturalist.org/v1/places/autocomplete?q='+text
+        ).then(x => x.json())
+        return suggestions.results.map(r => {
+          return {
+            text: r.display_name,
+            value: r
+          }
+        })
+      },
+      maxSuggestions: 10,
+      minInput: 2,
+      onselected: (e) => {
+        console.log(e.detail)
+        setPlaceId(e.detail.value.id)
+        e.target.querySelector('input').blur()
+      }
+    }),
+    species
+      ? species.length
+        ? h('div', {class: 'card'},
+            species.map(s => h(Square, {taxon: s.taxon})))
+        : h('div', null, 'no species')
+      : h('div', null, 'loading...')
+  ];
+}
+
+render(h(App), document.body);
 </script>
