@@ -93,7 +93,7 @@ function App() {
     const { signal } = controller;
     setSpecies(null)
     fetch(
-      `https://api.inaturalist.org/v1/observations/species_counts?verifiable=true&spam=false&place_id=${encodeURIComponent(placeId)}&locale=en-US&preferred_place_id=1&hrank=species`,
+      `https://api.inaturalist.org/v1/observations/species_counts?verifiable=true&spam=false&place_id=${encodeURIComponent(placeId)}&locale=en-US&preferred_place_id=1&hrank=species&month%5B%5D=${date.getUTCMonth()+1}`,
       { signal }
     ).then(r => r.json()).then(species => {
       const rand = mkRandom(('' + date.getUTCFullYear() + date.getUTCMonth())|0)
