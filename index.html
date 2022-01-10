@@ -37,6 +37,7 @@ web-complete .active {
 import { h, render } from 'https://unpkg.com/preact@latest?module';
 import { useState, useEffect } from 'https://unpkg.com/preact@latest/hooks/dist/hooks.module.js?module';
 
+// https://gist.github.com/blixt/f17b47c62508be59987b
 function mkRandom(seed) {
   return () => {
     return ((seed = seed * 16807 % 2147483647) - 1) / 2147483646
@@ -82,6 +83,7 @@ function capitalizePiece(piece) {
 
 }
 
+// https://github.com/inaturalist/inaturalist/blob/1606e8963a351b9d685a2bac64d40b7f955135e1/app/helpers/taxa_helper.rb#L184
 function capitalizeName(comname) {
   const uncapitalized = [
     "à",
@@ -131,6 +133,9 @@ const initialLocation = (location.hash.substr(1)|0) || 854
 
 function App() {
   const [date] = useState(new Date)
+  function seed(date) {
+    return ('' + date.getUTCFullYear() + date.getUTCMonth())|0
+  }
   const [species, setSpecies] = useState(null)
   const [placeId, setPlaceId] = useState(initialLocation)
 
@@ -152,12 +157,14 @@ function App() {
     const controller = new AbortController();
     const { signal } = controller;
     setSpecies(null)
+    const endOfLastMonth = new Date(date)
+    endOfLastMonth.setUTCDate(0)
     fetch(
-      `https://api.inaturalist.org/v1/observations/species_counts?verifiable=true&spam=false&place_id=${encodeURIComponent(placeId)}&locale=en-US&preferred_place_id=1&hrank=species&month%5B%5D=${date.getUTCMonth()+1}`,
+      `https://api.inaturalist.org/v1/observations/species_counts?verifiable=true&spam=false&place_id=${encodeURIComponent(placeId)}&locale=en-US&preferred_place_id=1&hrank=species&month%5B%5D=${date.getUTCMonth()+1}&d2=${endOfLastMonth.toISOString().substr(0, 10)}`,
       { signal }
     ).then(r => r.json()).then(species => {
-      const rand = mkRandom(('' + date.getUTCFullYear() + date.getUTCMonth())|0)
-      const squares = shuffle(rand, species.results).slice(0, 25)
+      const rand = mkRandom(seed(date))
+      const squares = shuffle(rand, species.results.slice()).slice(0, 25)
       setSpecies(squares)
     })
     return () => {
