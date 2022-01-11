@@ -1,13 +1,5 @@
 <!doctype html>
 <style>
-.square {
-  display: block;
-  text-decoration: none;
-  position: relative;
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-position: center;
-}
 .card {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -17,7 +9,22 @@
   overflow: hidden;
   box-shadow: 0px 3px 7px rgba(0, 0, 0, 15%);
 }
+.square {
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+  position: relative;
+}
+.square .image {
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: -1;
+}
 .square label {
+  cursor: inherit;
   position: absolute;
   bottom: 0;
   width: 100%;
@@ -26,6 +33,19 @@
   font-family: sans-serif;
   font-size: 14px;
   padding: 1px 2px;
+}
+.square.observed:after {
+  content: '✔';
+  color: lightgreen;
+  font-size: 6vmin;
+  line-height: 0;
+  text-shadow: 0px 0px 8px rgba(0, 0, 0, 80%);
+}
+.square.observed .image {
+  filter: brightness(0.7);
+}
+.square:hover .image {
+  filter: brightness(1.2) saturate(1.2);
 }
 web-complete .suggestions {
   position: absolute;
@@ -53,6 +73,71 @@ body {
 <script type="module">
 import { h, render } from 'https://unpkg.com/preact@latest?module';
 import { useState, useEffect } from 'https://unpkg.com/preact@latest/hooks/dist/hooks.module.js?module';
+
+const client_id = 'XD3VNuzjTjI_iplJjVjZXHlNHJBNm03u4FqFR1NuUs4'
+const redirect_uri = 'https://nornagon.github.io/inat-bingo/'
+
+function _arrayBufferToBase64( buffer ) {
+  let binary = '';
+  let bytes = new Uint8Array( buffer );
+  let len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode( bytes[ i ] );
+  }
+  return btoa( binary );
+}
+
+async function sha256b64(message) {
+  const msgBuffer = new TextEncoder().encode(message);                    
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return _arrayBufferToBase64(hashArray)
+}
+
+function getCodeVerifier() {
+  const stored = localStorage.getItem('iNatCodeVerifier')
+  if (stored) return stored
+  const generated = Math.random().toString()
+  localStorage.setItem('iNatCodeVerifier', generated)
+  return generated
+}
+async function auth() {
+  const codeVerifier = getCodeVerifier()
+  const codeChallenge = (await sha256b64(codeVerifier)).split('=')[0].replace(/\+/g, '-').replace(/\//g, '_')
+  const url = new URL('https://www.inaturalist.org/oauth/authorize')
+  for (const [k,v] of Object.entries({
+    client_id,
+    redirect_uri,
+    response_type: 'code',
+    code_challenge_method: 'S256',
+    code_challenge: codeChallenge,
+  })) url.searchParams.set(k, v)
+  location.href = url
+}
+
+function getToken(code) {
+  return fetch('https://www.inaturalist.org/oauth/token', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      client_id,
+      code,
+      redirect_uri,
+      grant_type: 'authorization_code',
+      code_verifier: getCodeVerifier(),
+    })
+  }).then(r => r.json())
+}
+
+function getJwt(accessToken) {
+  return fetch('https://www.inaturalist.org/users/api_token', {
+    headers: {
+      authorization: 'Bearer ' + accessToken
+    }
+  }).then(r => r.json()).then(j => j.api_token)
+}
 
 // https://gist.github.com/blixt/f17b47c62508be59987b
 function mkRandom(seed) {
@@ -139,12 +224,12 @@ function capitalizeName(comname) {
 }
 
 
-function Square({taxon}) {
+function Square({taxon, observed}) {
   return h('a', {
-    class: 'square',
+    class: ['square', observed ? 'observed' : ''].join(' '),
     href: 'https://inaturalist.org/taxa/' + taxon.id,
-    style: {'background-image': `url(${taxon.default_photo.medium_url})`}
   }, [
+    h('div', {class: 'image', style: {'background-image': `url(${taxon.default_photo.medium_url})`}}),
     //h('img', {src: taxon.default_photo.square_url}),
     h('label', null, taxon.preferred_common_name ? capitalizeName(taxon.preferred_common_name): taxon.name)
   ])
@@ -160,6 +245,31 @@ function App() {
   const [species, setSpecies] = useState(null)
   const [placeId, setPlaceId] = useState(initialLocation)
   const [place, setPlace] = useState(null)
+  const [user, setUser] = useState(null)
+  const [observations, setObservations] = useState(null)
+
+  useEffect(() => {
+    const jwt = localStorage.getItem('iNatJWT')
+    if (jwt) {
+      (async () => {
+        const user = (await fetch('https://api.inaturalist.org/v1/users/me', {
+          headers: {
+            authorization: `Bearer ${jwt}`
+          }
+        }).then(r => r.json())).results[0]
+        setUser(user)
+        const observationsUrl = new URL('https://api.inaturalist.org/v1/observations')
+        for (const [k, v] of Object.entries({
+          user_id: user.id,
+          year: date.getUTCFullYear(),
+          month: date.getUTCMonth()+1,
+        })) observationsUrl.searchParams.set(k, v)
+        const observations = await fetch(observationsUrl).then(r => r.json())
+        setObservations(observations.results)
+        console.log(observations)
+      })()
+    }
+  }, [])
 
   useEffect(() => {
     location.hash = placeId
@@ -229,15 +339,33 @@ function App() {
     species
       ? species.length
         ? h('div', {class: 'card'},
-            species.map(s => h(Square, {taxon: s.taxon})))
+            species.map((s) => h(Square, {taxon: s.taxon, observed: observations?.some(obs => obs.taxon.id === s.taxon.id)})))
         : h('div', null, 'no species')
       : h('div', null, 'loading...'),
     h('div', null, [
       `iNaturalist Bingo // ${date.getUTCFullYear()}-${(date.getUTCMonth()+1).toString().padStart(2, '0')} // `,
-      place ? place.display_name : '...'
+      place ? place.display_name : '...',
+      ' // ',
+      user
+        ? h('a', {href: `https://www.inaturalist.org/people/${encodeURIComponent(user.login)}`}, user.login)
+        : h('button', {onClick: () => {auth()}}, 'auth')
     ])
   ];
 }
 
-render(h(App), document.body);
+;(async () => {
+  const url = new URL(location.href)
+  const code = url.searchParams.get('code')
+  if (code) {
+    const token = await getToken(code)
+    url.searchParams.delete('code')
+    history.replaceState(null, null, url)
+    const { access_token } = token
+    localStorage.setItem('iNatAccessToken', access_token)
+    const jwt = await getJwt(access_token)
+    console.log(jwt)
+    localStorage.setItem('iNatJWT', jwt)
+  }
+  render(h(App), document.body);
+})()
 </script>
