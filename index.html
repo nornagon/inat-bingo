@@ -265,6 +265,7 @@ function App() {
           user_id: user.id,
           year: date.getUTCFullYear(),
           month: date.getUTCMonth()+1,
+          per_page: 200,
         })) observationsUrl.searchParams.set(k, v)
         const observations = await fetch(observationsUrl).then(r => r.json())
         setObservations(observations.results)
