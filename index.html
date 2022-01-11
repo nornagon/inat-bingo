@@ -4,13 +4,15 @@
   display: block;
   text-decoration: none;
   position: relative;
-}
-.square > img {
-  display: block;
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
 }
 .card {
   display: grid;
-  grid-template-columns: repeat(5, min-content);
+  grid-template-columns: repeat(5, 1fr);
+  aspect-ratio: 1;
+  max-width: 100%;
 }
 .square label {
   position: absolute;
@@ -20,6 +22,7 @@
   color: white;
   font-family: sans-serif;
   font-size: 14px;
+  padding: 0 4px;
 }
 web-complete .suggestions {
   position: absolute;
@@ -31,6 +34,17 @@ web-complete .suggestion {
 web-complete .active {
   background: blue;
 }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  justify-items: center;
+  padding: 10px;
+  row-gap: 10px;
+}
+* { box-sizing: border-box; }
 </style>
 <script type="module" src="https://unpkg.com/web-complete"></script>
 <script type="module">
@@ -123,8 +137,12 @@ function capitalizeName(comname) {
 
 
 function Square({taxon}) {
-  return h('a', {class: 'square', href: 'https://inaturalist.org/taxa/' + taxon.id}, [
-    h('img', {src: taxon.default_photo.square_url, width: 150, height: 150}),
+  return h('a', {
+    class: 'square',
+    href: 'https://inaturalist.org/taxa/' + taxon.id,
+    style: {'background-image': `url(${taxon.default_photo.medium_url})`}
+  }, [
+    //h('img', {src: taxon.default_photo.square_url}),
     h('label', null, taxon.preferred_common_name ? capitalizeName(taxon.preferred_common_name): taxon.name)
   ])
 }
@@ -138,9 +156,16 @@ function App() {
   }
   const [species, setSpecies] = useState(null)
   const [placeId, setPlaceId] = useState(initialLocation)
+  const [place, setPlace] = useState(null)
 
   useEffect(() => {
     location.hash = placeId
+    const controller = new AbortController();
+    const { signal } = controller;
+    fetch(`https://api.inaturalist.org/v1/places/${encodeURIComponent(placeId)}`, {signal}).then(r => r.json()).then(place => {
+      setPlace(place.results[0])
+    })
+    return () => { controller.abort() }
   }, [placeId])
 
   useEffect(() => {
@@ -159,20 +184,26 @@ function App() {
     setSpecies(null)
     const endOfLastMonth = new Date(date)
     endOfLastMonth.setUTCDate(0)
-    fetch(
-      `https://api.inaturalist.org/v1/observations/species_counts?verifiable=true&spam=false&place_id=${encodeURIComponent(placeId)}&locale=en-US&preferred_place_id=1&hrank=species&month%5B%5D=${date.getUTCMonth()+1}&d2=${endOfLastMonth.toISOString().substr(0, 10)}`,
-      { signal }
-    ).then(r => r.json()).then(species => {
+    const url = new URL('https://api.inaturalist.org/v1/observations/species_counts')
+    for (const [k, v] of Object.entries({
+      verifiable: true,
+      spam: false,
+      place_id: placeId,
+      locale: 'en-US',
+      preferred_place_id: 1,
+      hrank: 'species',
+      'month[]': date.getUTCMonth()+1,
+      created_d2: endOfLastMonth.toISOString().substr(0, 10)
+    })) url.searchParams.set(k, v)
+    fetch(url, { signal }).then(r => r.json()).then(species => {
       const rand = mkRandom(seed(date))
       const squares = shuffle(rand, species.results.slice()).slice(0, 25)
       setSpecies(squares)
     })
-    return () => {
-      controller.abort()
-    }
+    return () => { controller.abort() }
   }, [date, placeId])
   return [
-    h('web-complete', {
+    /*h('web-complete', {
       suggestionGenerator: async (text) => {
         const suggestions = await fetch(
           'https://api.inaturalist.org/v1/places/autocomplete?q='+text
@@ -191,13 +222,17 @@ function App() {
         setPlaceId(e.detail.value.id)
         e.target.querySelector('input').blur()
       }
-    }),
+    }),*/
     species
       ? species.length
         ? h('div', {class: 'card'},
             species.map(s => h(Square, {taxon: s.taxon})))
         : h('div', null, 'no species')
-      : h('div', null, 'loading...')
+      : h('div', null, 'loading...'),
+    h('div', null, [
+      `iNaturalist Bingo // ${date.getUTCFullYear()}-${(date.getUTCMonth()+1).toString().padStart(2, '0')} // `,
+      place ? place.display_name : '...'
+    ])
   ];
 }
 
