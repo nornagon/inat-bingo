@@ -225,7 +225,6 @@ function Square({taxon, observed}) {
     href: 'https://inaturalist.org/taxa/' + taxon.id,
   }, [
     h('div', {class: 'image', style: {'background-image': `url(${taxon.default_photo.medium_url})`}}),
-    //h('img', {src: taxon.default_photo.square_url}),
     h('label', null, taxon.preferred_common_name ? capitalizeName(taxon.preferred_common_name): taxon.name)
   ])
 }
@@ -366,9 +365,7 @@ async function login() {
   let accessToken = localStorage.getItem('iNatAccessToken')
   if (accessToken) {
     const jwtResponse = await fetch('https://www.inaturalist.org/users/api_token', {
-      headers: {
-        authorization: 'Bearer ' + accessToken
-      }
+      headers: { authorization: `Bearer ${accessToken}` }
     })
     if (!jwtResponse.ok) {
       localStorage.removeItem('iNatAccessToken')
