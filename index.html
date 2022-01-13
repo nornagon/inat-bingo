@@ -134,14 +134,6 @@ function getToken(code) {
   }).then(r => r.json())
 }
 
-function getJwt(accessToken) {
-  return fetch('https://www.inaturalist.org/users/api_token', {
-    headers: {
-      authorization: 'Bearer ' + accessToken
-    }
-  }).then(r => r.json()).then(j => j.api_token)
-}
-
 // https://gist.github.com/blixt/f17b47c62508be59987b
 function mkRandom(seed) {
   return () => {
@@ -240,7 +232,7 @@ function Square({taxon, observed}) {
 
 const initialLocation = (location.hash.substr(1)|0) || 854
 
-function App() {
+function App({user}) {
   const [date] = useState(new Date)
   function seed(date) {
     return ('' + date.getUTCFullYear() + date.getUTCMonth())|0
@@ -248,19 +240,13 @@ function App() {
   const [species, setSpecies] = useState(null)
   const [placeId, setPlaceId] = useState(initialLocation)
   const [place, setPlace] = useState(null)
-  const [user, setUser] = useState(null)
   const [observations, setObservations] = useState(null)
 
   useEffect(() => {
-    const jwt = localStorage.getItem('iNatJWT')
-    if (jwt) {
-      (async () => {
-        const user = (await fetch('https://api.inaturalist.org/v1/users/me', {
-          headers: {
-            authorization: `Bearer ${jwt}`
-          }
-        }).then(r => r.json())).results[0]
-        setUser(user)
+    const controller = new AbortController();
+    const { signal } = controller;
+    (async () => {
+      if (user) {
         const observationsUrl = new URL('https://api.inaturalist.org/v1/observations')
         for (const [k, v] of Object.entries({
           user_id: user.id,
@@ -268,12 +254,12 @@ function App() {
           month: date.getUTCMonth()+1,
           per_page: 200,
         })) observationsUrl.searchParams.set(k, v)
-        const observations = await fetch(observationsUrl).then(r => r.json())
+        const observations = await fetch(observationsUrl, {signal}).then(r => r.json())
         setObservations(observations.results)
-        console.log(observations)
-      })()
-    }
-  }, [])
+      }
+    })()
+    return () => { controller.abort() }
+  }, [user])
 
   useEffect(() => {
     location.hash = placeId
@@ -357,6 +343,52 @@ function App() {
   ];
 }
 
+async function login() {
+  // First, try a cached jwt if we have one.
+  let jwt = localStorage.getItem('iNatJWT');
+  if (jwt) {
+    const userResponse = await fetch('https://api.inaturalist.org/v1/users/me', {
+      headers: { authorization: `Bearer ${jwt}` }
+    })
+    if (!userResponse.ok) {
+      localStorage.removeItem('iNatJWT')
+      if (userResponse.status === 401) {
+        // JWT is bad; fall out to refreshing it.
+      } else {
+        // Something else went wrong; panic.
+        throw new Error(`Unable to authenticate with iNaturalist: ${userResponse.status} ${userResponse.statusText}`)
+      }
+    } else {
+      // Alles klar.
+      return (await userResponse.json()).results[0]
+    }
+  }
+  let accessToken = localStorage.getItem('iNatAccessToken')
+  if (accessToken) {
+    const jwtResponse = await fetch('https://www.inaturalist.org/users/api_token', {
+      headers: {
+        authorization: 'Bearer ' + accessToken
+      }
+    })
+    if (!jwtResponse.ok) {
+      localStorage.removeItem('iNatAccessToken')
+      if (userResponse.status === 401) {
+        // Access token is bad (expired?); fall out to "not logged in".
+      } else {
+        // Something else went wrong; panic.
+        throw new Error(`Unable to authenticate with iNaturalist: ${jwtResponse.status} ${jwtResponse.statusText}`)
+      }
+    } else {
+      // We have the token! Retry.
+      jwt = (await jwtResponse.json()).api_token
+      localStorage.setItem('iNatJWT', jwt)
+      return await fetch('https://api.inaturalist.org/v1/users/me', {
+        headers: { authorization: `Bearer ${jwt}` }
+      }).then(r => r.json()).then(j => j.results[0])
+    }
+  }
+}
+
 ;(async () => {
   const url = new URL(location.href)
   const code = url.searchParams.get('code')
@@ -366,10 +398,8 @@ function App() {
     history.replaceState(null, null, url)
     const { access_token } = token
     localStorage.setItem('iNatAccessToken', access_token)
-    const jwt = await getJwt(access_token)
-    console.log(jwt)
-    localStorage.setItem('iNatJWT', jwt)
   }
-  render(h(App), document.body);
+  const user = await login()
+  render(h(App, {user}), document.body)
 })()
 </script>
