@@ -2,7 +2,7 @@
 <title>iNaturalist Bingo</title>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="https://unpkg.com/dialog-polyfill@0.5.6/dist/dialog-polyfill.css">
+<link rel="stylesheet" href="https://cdn.skypack.dev/dialog-polyfill@0.5.6/dist/dialog-polyfill.css">
 <style>
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
@@ -81,9 +81,9 @@ dialog h1 {
 </style>
 <script type="module" src="https://unpkg.com/web-complete"></script>
 <script type="module">
-import { h, render } from 'https://unpkg.com/preact@latest?module';
-import { useState, useLayoutEffect, useEffect, useRef } from 'https://unpkg.com/preact@latest/hooks/dist/hooks.module.js?module';
-import dialogPolyfill from 'https://unpkg.com/dialog-polyfill?module'
+import { h, render } from 'https://cdn.skypack.dev/preact@10';
+import { useState, useLayoutEffect, useEffect, useRef } from 'https://cdn.skypack.dev/preact@10/hooks';
+import dialogPolyfill from 'https://cdn.skypack.dev/dialog-polyfill'
 
 const client_id = 'XD3VNuzjTjI_iplJjVjZXHlNHJBNm03u4FqFR1NuUs4'
 const redirect_uri = 'https://nornagon.github.io/inat-bingo/'
