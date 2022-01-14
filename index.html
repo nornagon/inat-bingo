@@ -1,6 +1,8 @@
 <!doctype html>
 <title>iNaturalist Bingo</title>
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/dialog-polyfill@0.5.6/dist/dialog-polyfill.css">
 <style>
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
@@ -60,10 +62,6 @@ body {
 .square:hover .image {
   filter: brightness(1.2) saturate(1.2);
 }
-web-complete .suggestions {
-  position: absolute;
-  z-index: 1;
-}
 web-complete .suggestion {
   display: block;
 }
@@ -71,11 +69,21 @@ web-complete .active {
   background: blue;
 }
 
+dialog::backdrop, dialog + .backdrop {
+  background: rgba(0, 0, 0, 50%);
+}
+dialog h1 {
+  margin: 0;
+  font-family: sans-serif;
+  font-size: 150%;
+}
+
 </style>
 <script type="module" src="https://unpkg.com/web-complete"></script>
 <script type="module">
 import { h, render } from 'https://unpkg.com/preact@latest?module';
-import { useState, useEffect } from 'https://unpkg.com/preact@latest/hooks/dist/hooks.module.js?module';
+import { useState, useLayoutEffect, useEffect, useRef } from 'https://unpkg.com/preact@latest/hooks/dist/hooks.module.js?module';
+import dialogPolyfill from 'https://unpkg.com/dialog-polyfill?module'
 
 const client_id = 'XD3VNuzjTjI_iplJjVjZXHlNHJBNm03u4FqFR1NuUs4'
 const redirect_uri = 'https://nornagon.github.io/inat-bingo/'
@@ -240,6 +248,7 @@ function App({user}) {
   const [placeId, setPlaceId] = useState(initialLocation)
   const [place, setPlace] = useState(null)
   const [observations, setObservations] = useState(null)
+  const [choosingLocation, setChoosingLocation] = useState(false)
 
   useEffect(() => {
     const controller = new AbortController();
@@ -304,27 +313,20 @@ function App({user}) {
     })
     return () => { controller.abort() }
   }, [date, placeId])
+
+  function chooseLocation() {
+    setChoosingLocation(true)
+  }
+
+  useLayoutEffect(() => {
+    if (choosingLocation) {
+      const dialog = document.querySelector('dialog')
+      dialogPolyfill.registerDialog(dialog)
+      dialog.showModal()
+    }
+  }, [choosingLocation])
+
   return [
-    /*h('web-complete', {
-      suggestionGenerator: async (text) => {
-        const suggestions = await fetch(
-          'https://api.inaturalist.org/v1/places/autocomplete?q='+text
-        ).then(x => x.json())
-        return suggestions.results.map(r => {
-          return {
-            text: r.display_name,
-            value: r
-          }
-        })
-      },
-      maxSuggestions: 10,
-      minInput: 2,
-      onselected: (e) => {
-        console.log(e.detail)
-        setPlaceId(e.detail.value.id)
-        e.target.querySelector('input').blur()
-      }
-    }),*/
     species
       ? species.length
         ? h('div', {class: 'card'},
@@ -333,13 +335,52 @@ function App({user}) {
       : h('div', null, 'loading...'),
     h('div', null, [
       `iNaturalist Bingo // ${date.getUTCFullYear()}-${(date.getUTCMonth()+1).toString().padStart(2, '0')} // `,
-      place ? place.display_name : '...',
+      place
+        ? h('span', {onClick: chooseLocation, style: {cursor: 'pointer'}}, [
+          h('span', {style: {'text-decoration': 'underline dotted 1px'}}, place.display_name),
+          ' ▾'
+        ])
+        : '...',
       ' // ',
       user
         ? h('a', {href: `https://www.inaturalist.org/people/${encodeURIComponent(user.login)}`}, user.login)
         : h('button', {onClick: () => {auth()}}, 'auth')
-    ])
+    ]),
+    choosingLocation ? h('dialog', {onclose: () => {
+      setChoosingLocation(false)
+    }}, h(LocationChooser, {onchange: (id) => { setPlaceId(id); setChoosingLocation(false) }})) : null,
   ];
+}
+
+function LocationChooser({onchange}) {
+  const ref = useRef(null)
+  useLayoutEffect(() => {
+  setTimeout(() => {
+    ref.current?.querySelector('input')?.focus()
+    }, 100)
+  }, [])
+  return h('div', {}, [
+    h('h1', null, 'Change Location'),
+    h('web-complete', {
+      ref,
+      suggestionGenerator: async (text) => {
+        const suggestions = await fetch(
+          'https://api.inaturalist.org/v1/search?sources=places&q='+encodeURIComponent(text)
+        ).then(x => x.json())
+        return suggestions.results.map(r => {
+          return {
+            text: r.record.display_name,
+            value: r.record
+          }
+        })
+      },
+      maxSuggestions: 10,
+      minInput: 2,
+      onselected: (e) => {
+        onchange(e.detail.value.id)
+      }
+    })
+  ])
 }
 
 async function login() {
