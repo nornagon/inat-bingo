@@ -122,7 +122,6 @@ async function auth() {
     response_type: 'code',
     code_challenge_method: 'S256',
     code_challenge: codeChallenge,
-    scope: 'login',
   })) url.searchParams.set(k, v)
   location.href = url
 }
