@@ -298,7 +298,7 @@ function App({user}) {
     const endOfLastMonth = new Date(date)
     endOfLastMonth.setUTCDate(0)
     const url = new URL('https://api.inaturalist.org/v1/observations/species_counts')
-    for (const [k, v] of Object.entries({
+    const params = {
       verifiable: true,
       spam: false,
       place_id: placeId,
@@ -307,7 +307,13 @@ function App({user}) {
       hrank: 'species',
       'month[]': date.getUTCMonth()+1,
       created_d2: endOfLastMonth.toISOString().substr(0, 10)
-    })) url.searchParams.set(k, v)
+    }
+    if (date >= Date.UTC(2022, 1)) {
+      // Beginning Feb 2022, we restrict chosen species to those with
+      // research-grade observations.
+      params.quality_grade = 'research'
+    }
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
     fetch(url, { signal }).then(r => r.json()).then(species => {
       const rand = mkRandom(seed(date))
       const squares = shuffle(rand, species.results.slice()).slice(0, 25)
