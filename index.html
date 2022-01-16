@@ -289,7 +289,7 @@ function App({user}) {
     return () => {
       window.removeEventListener('hashchange', hashchange)
     }
-  })
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController();
