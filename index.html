@@ -251,23 +251,25 @@ function App({user}) {
   const [choosingLocation, setChoosingLocation] = useState(false)
 
   useEffect(() => {
+    if (!species) return
     const controller = new AbortController();
     const { signal } = controller;
     (async () => {
       if (user) {
-        const observationsUrl = new URL('https://api.inaturalist.org/v1/observations')
+        const observationsUrl = new URL('https://api.inaturalist.org/v1/observations/species_counts')
         for (const [k, v] of Object.entries({
           user_id: user.id,
           year: date.getUTCFullYear(),
           month: date.getUTCMonth()+1,
-          per_page: 200,
+          per_page: species.length,
+          taxon_id: species.map(s => s.taxon.id).join(',')
         })) observationsUrl.searchParams.set(k, v)
         const observations = await fetch(observationsUrl, {signal}).then(r => r.json())
         setObservations(observations.results)
       }
     })()
     return () => { controller.abort() }
-  }, [user])
+  }, [user, species])
 
   useEffect(() => {
     location.hash = placeId
@@ -431,7 +433,6 @@ async function login() {
   const url = new URL(location.href)
   const code = url.searchParams.get('code')
   if (code) {
-    debugger
     const token = await getToken(code)
     url.searchParams.delete('code')
     history.replaceState(null, null, url)
