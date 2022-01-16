@@ -410,7 +410,7 @@ async function login() {
     })
     if (!jwtResponse.ok) {
       localStorage.removeItem('iNatAccessToken')
-      if (userResponse.status === 401) {
+      if (jwtResponse.status === 401) {
         // Access token is bad (expired?); fall out to "not logged in".
       } else {
         // Something else went wrong; panic.
