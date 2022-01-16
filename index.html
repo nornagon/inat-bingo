@@ -431,9 +431,10 @@ async function login() {
   const url = new URL(location.href)
   const code = url.searchParams.get('code')
   if (code) {
+    debugger
     const token = await getToken(code)
-    //url.searchParams.delete('code')
-    //history.replaceState(null, null, url)
+    url.searchParams.delete('code')
+    history.replaceState(null, null, url)
     const { access_token } = token
     localStorage.setItem('iNatAccessToken', access_token)
   }
