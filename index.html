@@ -316,10 +316,6 @@ function App({user}) {
     return () => { controller.abort() }
   }, [date, placeId])
 
-  function chooseLocation() {
-    setChoosingLocation(true)
-  }
-
   useLayoutEffect(() => {
     if (choosingLocation) {
       const dialog = document.querySelector('dialog')
@@ -338,7 +334,7 @@ function App({user}) {
     h('div', null, [
       `iNaturalist Bingo // ${date.getUTCFullYear()}-${(date.getUTCMonth()+1).toString().padStart(2, '0')} // `,
       place
-        ? h('span', {onClick: chooseLocation, style: {cursor: 'pointer'}}, [
+        ? h('span', {onClick: () => setChoosingLocation(true), style: {cursor: 'pointer'}}, [
           h('span', {style: {'text-decoration': 'underline dotted 1px'}}, place.display_name),
           ' ▾'
         ])
